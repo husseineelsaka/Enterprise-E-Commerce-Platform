@@ -1,6 +1,6 @@
 package com.raya.product_service.service;
 
-import com.raya.product_service.models.Product;
+import com.raya.product_service.model.Product;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -61,4 +61,19 @@ class ProductServiceTest {
         assertTrue(productService.findById(saved.id()).isEmpty());
     }
     // BONUS Test 5: findAll() returns all saved products
+    @Test
+    void findAll_returnsAllSavedProduct(){
+
+        Product product = new Product(null, "Laptop", "15-inch laptop", BigDecimal.valueOf(999.99), "Electronics");
+
+        for (int i = 0; i < 5; i++) {
+            Product saved = productService.save(product);
+        }
+
+        List<Product> result = productService.findAll();
+
+
+        assertNotNull(result);
+        assertTrue((result.size() == 5));
+    }
 }
