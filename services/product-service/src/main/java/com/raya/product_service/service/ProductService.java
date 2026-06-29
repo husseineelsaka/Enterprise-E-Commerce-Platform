@@ -1,7 +1,6 @@
 package com.raya.product_service.service;
 
-import com.raya.product_service.ProductServiceApplication;
-import com.raya.product_service.models.Product;
+import com.raya.product_service.model.Product;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

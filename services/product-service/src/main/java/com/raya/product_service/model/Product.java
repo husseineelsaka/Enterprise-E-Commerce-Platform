@@ -1,4 +1,4 @@
-package com.raya.product_service.models;
+package com.raya.product_service.model;
 
 import java.math.BigDecimal;
 

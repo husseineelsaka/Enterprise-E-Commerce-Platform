@@ -1,6 +1,6 @@
 package com.raya.product_service.controller;
 
-import com.raya.product_service.models.Product;
+import com.raya.product_service.model.Product;
 import com.raya.product_service.service.ProductService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
