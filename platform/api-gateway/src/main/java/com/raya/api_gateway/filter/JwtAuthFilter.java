@@ -1,5 +1,6 @@
 package com.raya.api_gateway.filter;
 
+import com.raya.api_gateway.config.GatewayProperties;
 import com.raya.api_gateway.util.JwtUtil;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -34,14 +35,11 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     private record PublicRoute(HttpMethod method, String pathPattern) {}
 
-    private static final List<PublicRoute> PUBLIC_ROUTES =
-            List.of( new PublicRoute(HttpMethod.POST, "/api/auth/login"),
-                    new PublicRoute(HttpMethod.POST, "/api/auth/register"),
-                    new PublicRoute(HttpMethod.GET, "/actuator/**") ,
-                    new PublicRoute(HttpMethod.GET, "/api/v1/products/**"));
-
-    public JwtAuthFilter(JwtUtil jwtUtil) {
+    public JwtAuthFilter(JwtUtil jwtUtil, GatewayProperties gatewayProperties) {
         this.jwtUtil = jwtUtil;
+        this.publicRoutes = gatewayProperties.publicRoutes().stream()
+                .map(r -> new PublicRoute(HttpMethod.valueOf(r.method()), r.path()))
+                .toList();
     }
 
     @Override
@@ -86,7 +84,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isPublicRoute(HttpMethod method, String path) {
-        return PUBLIC_ROUTES.stream().anyMatch(route ->
+        return publicRoutes.stream().anyMatch(route ->
                 route.method().equals(method)
                         && pathMatcher.match(route.pathPattern(), path)
         );

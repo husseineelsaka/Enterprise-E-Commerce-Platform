@@ -23,6 +23,17 @@ spring:
               filters:
                 - AddResponseHeader=X-Platform, microservices-pro
 
+gateway:
+  public-routes:
+    - method: POST
+      path: /api/auth/login
+    - method: POST
+      path: /api/auth/register
+    - method: GET
+      path: /actuator/**
+    - method: GET
+      path: /api/v1/products/**
+
 jwt:
   secret: munamelafsafanflalss112377122dfasd
 
