@@ -16,6 +16,16 @@ spring:
               filters:
                 - AddResponseHeader=X-Platform, microservices-pro
 
+            - id: order-service
+              uri: lb://ORDER-SERVICE
+              predicates:
+                - Path=/api/v1/orders/**
+              filters:
+                - AddResponseHeader=X-Platform, microservices-pro
+
+jwt:
+  secret: munamelafsafanflalss112377122dfasd
+
 eureka:
   client:
     service-url:
