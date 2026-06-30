@@ -2,7 +2,10 @@ package com.raya.api_gateway.filter;
 
 import com.raya.api_gateway.util.JwtUtil;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.security.SignatureException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -27,6 +30,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     private final JwtUtil jwtUtil;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
+    private final List<PublicRoute> publicRoutes;
 
     private record PublicRoute(HttpMethod method, String pathPattern) {}
 
@@ -70,8 +74,14 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
                         headers.add("X-User-Role", role);
                     }).build();
             return chain.filter(exchange.mutate().request(enriched).build());
+        } catch (ExpiredJwtException e) {
+            return unauthorizedResponse(exchange, "Token expired: " + e.getMessage());
+        } catch (MalformedJwtException e) {
+            return unauthorizedResponse(exchange, "Malformed token: " + e.getMessage());
+        } catch (SignatureException e) {
+            return unauthorizedResponse(exchange, "Invalid signature: " + e.getMessage());
         } catch (JwtException e) {
-            return unauthorizedResponse(exchange, "Invalid or expired token");
+            return unauthorizedResponse(exchange, "Invalid token: " + e.getMessage());
         }
     }
 
