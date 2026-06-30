@@ -1,7 +1,7 @@
 package com.raya.api_gateway.filter;
 
 import com.raya.api_gateway.config.GatewayProperties;
-import com.raya.api_gateway.util.JwtUtil;
+import com.raya.api_gateway.security.JwtUtil;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;

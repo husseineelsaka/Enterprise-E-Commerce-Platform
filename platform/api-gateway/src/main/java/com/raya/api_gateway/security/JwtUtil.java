@@ -1,4 +1,4 @@
-package com.raya.api_gateway.util;
+package com.raya.api_gateway.security;
 
 
 import io.jsonwebtoken.Claims;
@@ -27,5 +27,17 @@ public class JwtUtil {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();  // throws if invalid or expired
+    }
+
+    public boolean isTokenValid(String token) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
