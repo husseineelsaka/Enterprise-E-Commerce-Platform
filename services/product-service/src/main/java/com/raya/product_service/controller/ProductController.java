@@ -2,6 +2,7 @@ package com.raya.product_service.controller;
 
 import com.raya.product_service.model.Product;
 import com.raya.product_service.service.ProductService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +40,7 @@ public class ProductController {
     // TODO: POST /api/v1/products        → create a new product
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Product create(@RequestBody Product product) {
+    public Product create(@Valid @RequestBody Product product) {
         return productService.save(product);
     }
 
