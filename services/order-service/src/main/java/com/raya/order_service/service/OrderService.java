@@ -48,12 +48,12 @@ public class OrderService {
     //         CompletableFuture.supplyAsync(), call paymentService.processPayment(),
     //         and return a CONFIRMED OrderResponse with the payment's transactionId
     public CompletableFuture<OrderResponse> createOrderAsync(OrderRequest request) {
-        return CompletableFuture.supplyAsync(() -> {
-            PaymentResponse payment = paymentService.processPayment(
-                    new PaymentRequest(request.amount())
-            );
-            return new OrderResponse("CONFIRMED", payment.transactionId());
-        });
+        PaymentResponse payment = paymentService.processPayment(
+                new PaymentRequest(request.amount())
+        );
+        return CompletableFuture.completedFuture(
+                new OrderResponse("CONFIRMED", payment.transactionId())
+        );
     }
 
     // TODO 6 (Session 4): implement paymentFallback — must have the same
