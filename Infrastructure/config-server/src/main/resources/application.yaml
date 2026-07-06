@@ -7,7 +7,7 @@ spring:
       server:
         git:
           uri: https://github.com/SayedBaladoh/microservice-cours-config-server
-          default-lablel: main
+          default-label: main
           clone-on-start: true
 
 server:
