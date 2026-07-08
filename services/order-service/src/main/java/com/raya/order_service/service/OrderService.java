@@ -35,25 +35,34 @@ public class OrderService {
     private PaymentService paymentService;
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
+
+    // TODO 3 (Session 5): annotate with @Bulkhead(name="paymentService", fallbackMethod="bulkheadFallback")
+    @Bulkhead(name = "paymentService", fallbackMethod = "bulkheadFallback")
+
+
+    // TODO 4 (Session 5): annotate with @TimeLimiter(name="paymentService", fallbackMethod="timeoutFallback")
+    //         Apply all four IN THIS ORDER, top to bottom:
+    //         @Bulkhead, @TimeLimiter, @CircuitBreaker, @Retry
+    @TimeLimiter(name = "paymentService", fallbackMethod = "timeoutFallback")
+
+
     // TODO 1 (Session 4): annotate with @CircuitBreaker(name="paymentService", fallbackMethod="paymentFallback")
     @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
 
     // TODO 2 (Session 4): annotate with @Retry(name="paymentService")
     @Retry(name = "paymentService")
-    // TODO 3 (Session 5): annotate with @Bulkhead(name="paymentService", fallbackMethod="bulkheadFallback")
-    // TODO 4 (Session 5): annotate with @TimeLimiter(name="paymentService", fallbackMethod="timeoutFallback")
-    //         Apply all four IN THIS ORDER, top to bottom:
-    //         @Bulkhead, @TimeLimiter, @CircuitBreaker, @Retry
+
+
     // TODO 5: implement the method body — wrap the payment call in
     //         CompletableFuture.supplyAsync(), call paymentService.processPayment(),
     //         and return a CONFIRMED OrderResponse with the payment's transactionId
     public CompletableFuture<OrderResponse> createOrderAsync(OrderRequest request) {
-        PaymentResponse payment = paymentService.processPayment(
-                new PaymentRequest(request.amount())
-        );
-        return CompletableFuture.completedFuture(
-                new OrderResponse("CONFIRMED", payment.transactionId())
-        );
+        return CompletableFuture.supplyAsync(() -> {
+            PaymentResponse payment = paymentService.processPayment(
+                    new PaymentRequest(request.amount())
+            );
+            return new OrderResponse("CONFIRMED", payment.transactionId());
+        });
     }
 
     // TODO 6 (Session 4): implement paymentFallback — must have the same
@@ -70,7 +79,11 @@ public class OrderService {
     // TODO 7 (Session 5): implement bulkheadFallback — params must be
     //         (OrderRequest, BulkheadFullException). Return status "QUEUED".
     public CompletableFuture<OrderResponse> bulkheadFallback(OrderRequest request, BulkheadFullException ex) {
-        throw new UnsupportedOperationException("TODO: implement bulkheadFallback()");
+        log.warn("[BULKHEAD] Concurrent limit reached: {}", ex.getMessage());
+        return CompletableFuture.completedFuture(new OrderResponse(
+                "QUEUED",
+                "System busy — your order is queued"
+        ));
     }
 
     // TODO 8 (Session 5): implement timeoutFallback — params must be
@@ -78,6 +91,10 @@ public class OrderService {
     //         CompletableFuture<OrderResponse> (matching the annotated method).
     //         Return status "PENDING".
     public CompletableFuture<OrderResponse> timeoutFallback(OrderRequest request, TimeoutException ex) {
-        throw new UnsupportedOperationException("TODO: implement timeoutFallback()");
+        log.warn("[TIMEOUT] Payment exceeded the configured time limit: {}", ex.getMessage());
+        return CompletableFuture.completedFuture(new OrderResponse(
+                "PENDING",
+                "Payment timed out — will retry asynchronously"
+        ));
     }
 }
