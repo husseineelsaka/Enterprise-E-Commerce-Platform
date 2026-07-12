@@ -49,7 +49,7 @@ class OrderServiceTest {
 
     @Test
     void paymentFallback_returnsPendingOrderResponse() throws Exception {
-        OrderRequest request = new OrderRequest(new BigDecimal("100.00"));
+        OrderRequest request = new OrderRequest("PROD-1", 2, new BigDecimal("100.00"), "CUST-1");
         Throwable exception = new RuntimeException("Payment Service unavailable");
 
         CompletableFuture<OrderResponse> result = orderService.paymentFallback(request, exception);
@@ -70,7 +70,7 @@ class OrderServiceTest {
 
     @Test
     void bulkheadFallback_returnsQueuedStatus_onBulkheadFullException() throws Exception {
-        OrderRequest request = new OrderRequest(new BigDecimal("100.00"));
+        OrderRequest request = new OrderRequest("PROD-1", 2, new BigDecimal("100.00"), "CUST-1");
         // Built via the real public factory (verified against the
         // resilience4j source: Bulkhead.ofDefaults(name) + the public
         // static BulkheadFullException.createBulkheadFullException(Bulkhead)
@@ -88,7 +88,7 @@ class OrderServiceTest {
 
     @Test
     void timeoutFallback_returnsPendingStatus_wrappedInCompletableFuture() throws Exception {
-        OrderRequest request = new OrderRequest(new BigDecimal("100.00"));
+        OrderRequest request = new OrderRequest("PROD-1", 2, new BigDecimal("100.00"), "CUST-1");
         TimeoutException exception = new TimeoutException("Payment exceeded 2s limit");
 
         CompletableFuture<OrderResponse> result = orderService.timeoutFallback(request, exception);

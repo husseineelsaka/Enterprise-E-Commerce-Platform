@@ -1,4 +1,4 @@
-package com.raya.inventory_service.dto;
+package com.raya.order_service.dto;
 
 public record StockCheckResponse(
         String productId,

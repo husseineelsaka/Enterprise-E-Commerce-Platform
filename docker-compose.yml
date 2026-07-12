@@ -107,3 +107,15 @@ services:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
+
+  inventory-service:
+    build: ./services/inventory-service
+    container_name: inventory-service
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
