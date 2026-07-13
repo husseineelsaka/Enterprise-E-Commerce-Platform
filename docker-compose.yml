@@ -65,7 +65,7 @@ services:
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
       SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
-      SPRING_REDIS_HOST: redis
+      SPRING_DATA_REDIS_HOST: redis
     depends_on:
       discovery-server:
         condition: service_healthy
@@ -75,6 +75,8 @@ services:
   product-service:
     build: ./services/product-service
     container_name: product-service
+    ports:
+      - "8081:8081"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
       SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
@@ -87,6 +89,8 @@ services:
   order-service:
     build: ./services/order-service
     container_name: order-service
+    ports:
+      - "8082:8082"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
       SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
@@ -99,6 +103,8 @@ services:
   payment-service:
     build: ./services/payment-service
     container_name: payment-service
+    ports:
+      - "8083:8083"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
       SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
@@ -111,6 +117,8 @@ services:
   inventory-service:
     build: ./services/inventory-service
     container_name: inventory-service
+    ports:
+      - "8084:8084"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
       SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
