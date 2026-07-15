@@ -128,6 +128,22 @@ services:
       discovery-server:
         condition: service_healthy
 
+  notification-service:
+    build: ./services/notification-service
+    container_name: notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
   kafka:
     image: apache/kafka:latest
     container_name: kafka
