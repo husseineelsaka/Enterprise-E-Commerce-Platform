@@ -1,6 +1,8 @@
 package com.raya.order_service.service;
 
 import com.raya.order_service.dto.*;
+import com.raya.order_service.event.OrderCreatedEvent;
+import com.raya.order_service.messaging.OrderEventPublisher;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -11,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
@@ -33,6 +36,10 @@ public class OrderService {
 
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private OrderEventPublisher eventPublisher;
+
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
 
@@ -68,6 +75,15 @@ public class OrderService {
             // Step 2: Process payment (only if stock is OK)
             PaymentResponse payment = paymentService.processPayment(
                     new PaymentRequest(request.amount()));
+
+            OrderCreatedEvent event = new OrderCreatedEvent(
+                    UUID.randomUUID().toString(),
+                    request.quantity(),
+                    request.amount(),
+                    request.customerId()
+            );
+            eventPublisher.publishOrderCreated(event);
+
             return new OrderResponse("CONFIRMED", payment.transactionId());
         });
     }
