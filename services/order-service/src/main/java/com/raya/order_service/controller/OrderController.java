@@ -4,19 +4,19 @@ import com.raya.order_service.dto.OrderRequest;
 import com.raya.order_service.dto.OrderResponse;
 import com.raya.order_service.service.OrderService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
- * OrderController — Session 4, extended in Session 5.
+ * OrderController — Session 7 (Choreography Saga).
  *
- * Implement the TODO below. See docs/labs/session-05-lab-3b.md — Spring MVC
- * handles CompletableFuture<ResponseEntity<...>> transparently; do NOT call
- * .get() or .join() here, that would defeat the purpose of the async wrapper.
+ * POST creates the order and starts the saga (returns PENDING immediately).
+ * GET returns the current persisted status — which becomes CONFIRMED or
+ * CANCELLED once the saga completes via Kafka events.
  */
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -28,11 +28,15 @@ public class OrderController {
         this.orderService = orderService;
     }
 
-    // TODO: POST /api/orders → call orderService.createOrderAsync(request)
-    //       and map the result to ResponseEntity.ok(...) via .thenApply()
     @PostMapping
-    public CompletableFuture<ResponseEntity<OrderResponse>> createOrder(@RequestBody OrderRequest request) {
-        return orderService.createOrderAsync(request)
-                .thenApply(ResponseEntity::ok);
+    public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest request) {
+        return ResponseEntity.ok(orderService.createOrder(request));
+    }
+
+    @GetMapping("/{id}/status")
+    public ResponseEntity<String> getStatus(@PathVariable String id) {
+        return orderService.findById(id)
+                .map(order -> ResponseEntity.ok(order.status().name()))
+                .orElse(ResponseEntity.notFound().build());
     }
 }

@@ -11,7 +11,7 @@ public class OrderEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(OrderEventPublisher.class);
 
-    public static final String ORDER_CREATED_TOPIC = "order-created";
+    public static final String ORDER_EVENTS_TOPIC = "order-events";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -20,14 +20,14 @@ public class OrderEventPublisher {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    public void publishOrderCreated(OrderCreatedEvent event) {
+    public void publishOrderPlaced(OrderCreatedEvent event) {
 
         kafkaTemplate.send(
-                ORDER_CREATED_TOPIC,
+                ORDER_EVENTS_TOPIC,
                 event.orderId(),
                 event
         ).join();
 
-        log.info("[Messageing] Published OrderCreatedEvent for order: {}", event.orderId());
+        log.info("[SAGA] Published OrderCreatedEvent for order: {}", event.orderId());
     }
 }
