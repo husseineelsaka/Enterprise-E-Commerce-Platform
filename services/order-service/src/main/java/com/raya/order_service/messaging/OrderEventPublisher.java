@@ -26,8 +26,8 @@ public class OrderEventPublisher {
                 ORDER_CREATED_TOPIC,
                 event.orderId(),
                 event
-        );
+        ).join();
 
-        log.info("Published OrderCreatedEvent for order: {}", event.orderId());
+        log.info("[Messageing] Published OrderCreatedEvent for order: {}", event.orderId());
     }
 }

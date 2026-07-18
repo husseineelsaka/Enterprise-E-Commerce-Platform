@@ -35,7 +35,7 @@ public class OrderService {
     private InventoryClient inventoryClient;
 
     @Autowired
-    private PaymentService paymentService;
+    private PaymentServiceClient paymentServiceClient;
 
     @Autowired
     private OrderEventPublisher eventPublisher;
@@ -73,12 +73,11 @@ public class OrderService {
                         "Insufficient stock: only " + stock.remainingStock() + " available");
             }
             // Step 2: Process payment (only if stock is OK)
-            PaymentResponse payment = paymentService.processPayment(
+            PaymentResponse payment = paymentServiceClient.processPayment(
                     new PaymentRequest(request.amount()));
 
             OrderCreatedEvent event = new OrderCreatedEvent(
                     UUID.randomUUID().toString(),
-                    request.quantity(),
                     request.amount(),
                     request.customerId()
             );

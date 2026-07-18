@@ -33,6 +33,6 @@ public class PaymentService {
             throw new RuntimeException("Payment Service unavailable");
 
         }
-        return new PaymentResponse("APPROVED",request.amount());
+        return new PaymentResponse(java.util.UUID.randomUUID().toString(), "APPROVED", request.amount());
     }
 }
