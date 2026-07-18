@@ -9,13 +9,14 @@ import com.raya.inventory_service.service.InsufficientStockException;
 import com.raya.inventory_service.service.InventoryService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class InventorySagaHandler {
@@ -30,9 +31,16 @@ public class InventorySagaHandler {
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @PostConstruct
+    public void init() {
+        log.info("[SAGA] InventorySagaHandler started — listening on order-events / payment-events");
+    }
+
     // STEP 2 of Saga: Reserve inventory when order is placed
     @KafkaListener(topics = "order-events", groupId = "inventory-service")
-    public void handleOrderPlaced(OrderPlacedEvent event) {
+    public void handleOrderPlaced(String rawEvent) {
+        if (!rawEvent.contains("OrderPlaced")) return;  // ignore other events
+        OrderPlacedEvent event = parseOrderPlaced(rawEvent);
         log.info("[SAGA] Handling OrderPlaced for order: {}", event.orderId());
         try {
             inventoryService.reserveStock(event.productId(), event.quantity(), event.orderId());
@@ -71,5 +79,15 @@ public class InventorySagaHandler {
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse saga event: " + rawEvent, e);
         }
+    }
+
+    private OrderPlacedEvent parseOrderPlaced(String rawEvent) {
+        JsonNode node = readTree(rawEvent);
+        return new OrderPlacedEvent(
+                node.get("orderId").asText(),
+                node.get("productId").asText(),
+                node.get("quantity").asInt(),
+                node.get("amount") != null ? new java.math.BigDecimal(node.get("amount").asText()) : null,
+                node.get("customerId") != null ? node.get("customerId").asText() : null);
     }
 }

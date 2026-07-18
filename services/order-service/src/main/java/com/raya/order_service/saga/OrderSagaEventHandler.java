@@ -6,11 +6,13 @@ import com.raya.order_service.repository.OrderRepository;
 import com.raya.order_service.saga.event.InventoryReleasedEvent;
 import com.raya.order_service.saga.event.PaymentCompletedEvent;
 import com.raya.order_service.saga.event.PaymentFailedEvent;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,8 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * OrderSagaEventHandler — Session 7.
  * Listens for the final Saga outcomes and updates the order status.
  * Follows the slide's simplified parsing: discriminate by event type in the
- * JSON payload, then extract orderId. (Production: proper JSON deserialization
- * with a type discriminator instead of string contains.)
+ * JSON payload (the "type" field added via @JsonTypeInfo), then extract orderId.
  */
 @Service
 public class OrderSagaEventHandler {
@@ -35,16 +36,18 @@ public class OrderSagaEventHandler {
 
     // Listen for Saga completion events
     @KafkaListener(topics = "payment-events", groupId = "order-service")
-    public void handlePaymentEvent(ConsumerRecord<String, Object> record) {
-        String rawEvent = record.value() != null ? record.value().toString() : "";
+    public void handlePaymentEvent(
+            @Payload String rawEvent,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
 
         // Simplified: parse event type and orderId from JSON
+        // In production: use proper JSON deserialization with type discriminator
         if (rawEvent.contains("PaymentCompleted")) {
             PaymentCompletedEvent event = parsePaymentCompleted(rawEvent);
             Order order = orderRepository.findById(event.orderId()).orElseThrow();
             order.setStatus(OrderStatus.CONFIRMED);
             orderRepository.save(order);
-            log.info("[SAGA] Order {} CONFIRMED", event.orderId());
+            log.info("[SAGA] Order {} CONFIRMED ✅", event.orderId());
         } else if (rawEvent.contains("PaymentFailed")) {
             PaymentFailedEvent event = parsePaymentFailed(rawEvent);
             Order order = orderRepository.findById(event.orderId()).orElseThrow();
@@ -56,14 +59,13 @@ public class OrderSagaEventHandler {
 
     // Cancellation: inventory was released after payment failure
     @KafkaListener(topics = "inventory-events", groupId = "order-service-cancel")
-    public void handleInventoryReleased(ConsumerRecord<String, Object> record) {
-        String rawEvent = record.value() != null ? record.value().toString() : "";
+    public void handleInventoryReleased(String rawEvent) {
         if (rawEvent.contains("InventoryReleased")) {
             InventoryReleasedEvent event = parseInventoryReleased(rawEvent);
             Order order = orderRepository.findById(event.orderId()).orElseThrow();
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
-            log.info("[SAGA] Order {} CANCELLED — inventory released", event.orderId());
+            log.info("[SAGA] Order {} CANCELLED — inventory released ✅", event.orderId());
         }
     }
 

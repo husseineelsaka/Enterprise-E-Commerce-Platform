@@ -6,7 +6,6 @@ import com.raya.order_service.model.Order;
 import com.raya.order_service.model.OrderStatus;
 import com.raya.order_service.repository.OrderRepository;
 import com.raya.order_service.saga.OrderSagaEventHandler;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,10 +37,6 @@ class OrderServiceTest {
 
     private OrderRequest sampleRequest() {
         return new OrderRequest("PROD-001", 3, new BigDecimal("100.00"), "CUST-1");
-    }
-
-    private ConsumerRecord<String, Object> record(String topic, String json) {
-        return new ConsumerRecord<>(topic, 0, 0, "key", json);
     }
 
     // ── OrderService.createOrder() ───────────────────────────────────────
@@ -82,7 +77,7 @@ class OrderServiceTest {
         Order existing = new Order("ORD-1", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PENDING, "CUST-1");
         org.mockito.Mockito.when(orderRepository.findById("ORD-1")).thenReturn(Optional.of(existing));
 
-        sagaEventHandler.handlePaymentEvent(record("payment-events", "{\"type\":\"PaymentCompletedEvent\",\"orderId\":\"ORD-1\",\"transactionId\":\"TX-9\"}"));
+        sagaEventHandler.handlePaymentEvent("{\"type\":\"PaymentCompletedEvent\",\"orderId\":\"ORD-1\",\"transactionId\":\"TX-9\"}", "payment-events");
 
         assertThat(existing.status()).isEqualTo(OrderStatus.CONFIRMED);
         verify(orderRepository).save(existing);
@@ -93,7 +88,7 @@ class OrderServiceTest {
         Order existing = new Order("ORD-2", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PENDING, "CUST-1");
         org.mockito.Mockito.when(orderRepository.findById("ORD-2")).thenReturn(Optional.of(existing));
 
-        sagaEventHandler.handlePaymentEvent(record("payment-events", "{\"type\":\"PaymentFailedEvent\",\"orderId\":\"ORD-2\",\"reason\":\"declined\"}"));
+        sagaEventHandler.handlePaymentEvent("{\"type\":\"PaymentFailedEvent\",\"orderId\":\"ORD-2\",\"reason\":\"declined\"}", "payment-events");
 
         assertThat(existing.status()).isEqualTo(OrderStatus.PAYMENT_FAILED);
         verify(orderRepository).save(existing);
@@ -104,7 +99,7 @@ class OrderServiceTest {
         Order existing = new Order("ORD-3", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PAYMENT_FAILED, "CUST-1");
         org.mockito.Mockito.when(orderRepository.findById("ORD-3")).thenReturn(Optional.of(existing));
 
-        sagaEventHandler.handleInventoryReleased(record("inventory-events", "{\"type\":\"InventoryReleasedEvent\",\"orderId\":\"ORD-3\"}"));
+        sagaEventHandler.handleInventoryReleased("{\"type\":\"InventoryReleasedEvent\",\"orderId\":\"ORD-3\"}");
 
         assertThat(existing.status()).isEqualTo(OrderStatus.CANCELLED);
         verify(orderRepository).save(existing);

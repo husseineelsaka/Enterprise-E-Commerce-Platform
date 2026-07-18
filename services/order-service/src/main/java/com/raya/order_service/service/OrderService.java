@@ -42,6 +42,7 @@ public class OrderService {
         kafkaTemplate.send("order-events", order.orderId(),
                 new OrderPlacedEvent(order.orderId(), request.productId(),
                         request.quantity(), request.amount(), request.customerId()));
+        log.info("[SAGA] OrderPlacedEvent published for order: {}", order.orderId());
 
         // Return immediately — client gets PENDING, not final state
         return new OrderResponse(order.orderId(), OrderStatus.PENDING.name(), "Order received — processing...");
