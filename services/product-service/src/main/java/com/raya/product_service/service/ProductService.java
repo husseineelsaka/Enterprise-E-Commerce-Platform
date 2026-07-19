@@ -26,8 +26,12 @@ public class ProductService {
     }
 
     @Cacheable(value = "products", key = "#id")
+    public Product findByIdCached(Long id) {
+        return productRepository.findById(id).orElse(null);
+    }
+
     public Optional<Product> findById(Long id) {
-        return productRepository.findById(id);
+        return Optional.ofNullable(findByIdCached(id));
     }
 
     @Caching(
@@ -38,10 +42,7 @@ public class ProductService {
         return productRepository.save(product);
     }
 
-    @Caching(
-            put = { @CachePut(value = "products", key = "#product.id") },
-            evict = { @CacheEvict(value = "products", key = "'all'") }
-    )
+    @CacheEvict(value = "products", key = "'all'")
     public Product save(Product product) {
         return productRepository.save(product);
     }
