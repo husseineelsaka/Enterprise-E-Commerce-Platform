@@ -1,47 +1,56 @@
 package com.raya.product_service.service;
 
 import com.raya.product_service.model.Product;
+import com.raya.product_service.repository.ProductRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class ProductService {
 
-    // TODO 1: Inject a Map<Long, Product> as an in-memory store (no DB yet)
-    private final Map<Long, Product> store = new ConcurrentHashMap<>();
-    private final AtomicLong idGenerator = new AtomicLong(0);
+    private final ProductRepository productRepository;
 
+    public ProductService(ProductRepository productRepository) {
+        this.productRepository = productRepository;
+    }
 
-    // TODO 2: Implement findAll() returning List<Product>
+    @Cacheable(value = "products", key = "'all'")
     public List<Product> findAll() {
-        return List.copyOf(store.values());
+        return productRepository.findAll();
     }
-    // TODO 3: Implement findById(Long id) returning Optional<Product>
+
+    @Cacheable(value = "products", key = "#id")
     public Optional<Product> findById(Long id) {
-        return Optional.ofNullable(store.get(id));
+        return productRepository.findById(id);
     }
-    // TODO 4: Implement save(Product product) returning the saved Product
-    public Product save(Product product){
-        Long id = product.id() != null ? product.id() : idGenerator.incrementAndGet();
 
-        Product toSave = new Product(
-                id,
-                product.name(),
-                product.description(),
-                product.price(),
-                product.category()
-        );
-
-        store.put(id, toSave);
-        return toSave;
+    @Caching(
+            put = { @CachePut(value = "products", key = "#product.id") },
+            evict = { @CacheEvict(value = "products", key = "'all'") }
+    )
+    public Product update(Product product) {
+        return productRepository.save(product);
     }
-    // TODO 5: Implement deleteById(Long id)
-    public boolean deleteById(Long id){
-        return store.remove(id) != null;
+
+    @Caching(
+            put = { @CachePut(value = "products", key = "#product.id") },
+            evict = { @CacheEvict(value = "products", key = "'all'") }
+    )
+    public Product save(Product product) {
+        return productRepository.save(product);
+    }
+
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "products", key = "'all'")
+    })
+    public boolean deleteById(Long id) {
+        return productRepository.deleteById(id);
     }
 }
