@@ -1,9 +1,6 @@
 package com.raya.order_service.service;
 
-import com.raya.order_service.dto.OrderRequest;
-import com.raya.order_service.dto.OrderResponse;
-import com.raya.order_service.dto.PaymentRequest;
-import com.raya.order_service.dto.PaymentResponse;
+import com.raya.order_service.dto.*;
 import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -32,6 +29,9 @@ import java.util.concurrent.TimeoutException;
 public class OrderService {
 
     @Autowired
+    private InventoryClient inventoryClient;
+
+    @Autowired
     private PaymentService paymentService;
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
@@ -58,9 +58,16 @@ public class OrderService {
     //         and return a CONFIRMED OrderResponse with the payment's transactionId
     public CompletableFuture<OrderResponse> createOrderAsync(OrderRequest request) {
         return CompletableFuture.supplyAsync(() -> {
+            // Step 1: Check inventory BEFORE payment
+            StockCheckResponse stock = inventoryClient.checkStock(
+                    request.productId(), request.quantity());
+            if (!stock.available()) {
+                return new OrderResponse("REJECTED",
+                        "Insufficient stock: only " + stock.remainingStock() + " available");
+            }
+            // Step 2: Process payment (only if stock is OK)
             PaymentResponse payment = paymentService.processPayment(
-                    new PaymentRequest(request.amount())
-            );
+                    new PaymentRequest(request.amount()));
             return new OrderResponse("CONFIRMED", payment.transactionId());
         });
     }
