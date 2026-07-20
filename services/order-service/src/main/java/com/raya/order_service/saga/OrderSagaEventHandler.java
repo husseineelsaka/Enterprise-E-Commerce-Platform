@@ -1,5 +1,7 @@
 package com.raya.order_service.saga;
 
+import com.raya.order_service.event.OrderConfirmedEvent;
+import com.raya.order_service.messaging.OrderEventPublisher;
 import com.raya.order_service.model.Order;
 import com.raya.order_service.model.OrderStatus;
 import com.raya.order_service.repository.OrderRepository;
@@ -30,6 +32,9 @@ public class OrderSagaEventHandler {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private OrderEventPublisher eventPublisher;
+
     private static final Logger log = LoggerFactory.getLogger(OrderSagaEventHandler.class);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -48,6 +53,13 @@ public class OrderSagaEventHandler {
             order.setStatus(OrderStatus.CONFIRMED);
             orderRepository.save(order);
             log.info("[SAGA] Order {} CONFIRMED ✅", event.orderId());
+
+            eventPublisher.publishOrderConfirmed(new OrderConfirmedEvent(
+                    order.orderId(),
+                    order.amount(),
+                    order.customerId(),
+                    event.transactionId()
+            ));
         } else if (rawEvent.contains("PaymentFailed")) {
             PaymentFailedEvent event = parsePaymentFailed(rawEvent);
             Order order = orderRepository.findById(event.orderId()).orElseThrow();
