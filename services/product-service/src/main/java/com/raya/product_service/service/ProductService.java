@@ -52,6 +52,10 @@ public class ProductService {
             @CacheEvict(value = "products", key = "'all'")
     })
     public boolean deleteById(Long id) {
-        return productRepository.deleteById(id);
+        if (productRepository.existsById(id)) {
+            productRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
 }
