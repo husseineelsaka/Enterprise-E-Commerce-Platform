@@ -2,16 +2,20 @@ package com.raya.product_service.model;
 
 import jakarta.validation.constraints.*;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 
 public record Product(
         Long id,
-        @NotBlank @Size(max = 50)
+        @NotBlank
+        @Size(max = 50)
         String name,
-        @NotBlank @Size(max = 250)
+        @NotBlank
+        @Size(max = 250)
         String description,
-        @NotNull  @Positive
+        @NotNull
+        @Positive
         BigDecimal price,
         @NotBlank
         String category
-) {}
+) implements Serializable {}

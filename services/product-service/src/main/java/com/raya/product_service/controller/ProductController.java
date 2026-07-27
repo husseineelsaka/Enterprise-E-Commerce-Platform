@@ -44,6 +44,19 @@ public class ProductController {
         return productService.save(product);
     }
 
+    // TODO: PUT /api/v1/products/{id}     → update an existing product (404 if not found)
+    @PutMapping("/{id}")
+    public ResponseEntity<Product> update(@PathVariable Long id, @Valid @RequestBody Product product) {
+        Product toUpdate = new Product(
+                id,
+                product.name(),
+                product.description(),
+                product.price(),
+                product.category()
+        );
+        return ResponseEntity.ok(productService.update(toUpdate));
+    }
+
     // TODO: DELETE /api/v1/products/{id} → delete a product
 
     @DeleteMapping("/{id}")

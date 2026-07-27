@@ -1,114 +1,107 @@
-package com.raya.order_service;
+package com.raya.order_service.service;
 
 import com.raya.order_service.dto.OrderRequest;
 import com.raya.order_service.dto.OrderResponse;
-import com.raya.order_service.service.OrderService;
-import io.github.resilience4j.bulkhead.BulkheadFullException;
-import io.github.resilience4j.bulkhead.annotation.Bulkhead;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import com.raya.order_service.model.Order;
+import com.raya.order_service.model.OrderStatus;
+import com.raya.order_service.repository.OrderRepository;
+import com.raya.order_service.saga.OrderSagaEventHandler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeoutException;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 
-/**
- * OrderServiceTest — Session 4, Lab 3A, Task 4 + Session 5, Lab 3B, Task 3.
- *
- * Session 4 tests (1-2, adapted to this repo's merged async method):
- *   - paymentFallback() returns a PENDING status response
- *   - fallback has the correct signature: (OrderRequest, Throwable)
- *
- * Session 5 tests (3-5):
- *   - bulkheadFallback() returns QUEUED when given a BulkheadFullException
- *   - timeoutFallback() returns PENDING, wrapped in CompletableFuture<OrderResponse>
- *   - all four annotations (@Bulkhead, @TimeLimiter, @CircuitBreaker, @Retry)
- *     are present on createOrderAsync() — verified via reflection
- *
- * No PaymentService mocking is needed here: every test below calls a
- * fallback method directly (the documented Lab 3A/3B testing strategy),
- * not createOrderAsync() itself — so @InjectMocks just gives each test a
- * fresh OrderService; there's nothing to @Mock since PaymentService is
- * never invoked by these tests.
- */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
+
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
 
     @InjectMocks
     private OrderService orderService;
 
-    // ── Session 4 ───────────────────────────────────────────────────────
+    @InjectMocks
+    private OrderSagaEventHandler sagaEventHandler;
+
+    private OrderRequest sampleRequest() {
+        return new OrderRequest("PROD-001", 3, new BigDecimal("100.00"), "CUST-1");
+    }
+
+    // ── OrderService.createOrder() ───────────────────────────────────────
 
     @Test
-    void paymentFallback_returnsPendingOrderResponse() throws Exception {
-        OrderRequest request = new OrderRequest("PROD-1", 2, new BigDecimal("100.00"), "CUST-1");
-        Throwable exception = new RuntimeException("Payment Service unavailable");
+    void createOrder_returnsPendingAndPersistsOrder() {
+        OrderResponse response = orderService.createOrder(sampleRequest());
 
-        CompletableFuture<OrderResponse> result = orderService.paymentFallback(request, exception);
+        assertThat(response.orderId()).isNotBlank();
+        assertThat(response.status()).isEqualTo("PENDING");
+        assertThat(response.message()).contains("processing");
 
-        assertThat(result.get().status()).isEqualTo("PENDING");
+        ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository).save(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(OrderStatus.PENDING);
     }
 
     @Test
-    void paymentFallback_hasCorrectSignature_requestPlusThrowable() throws NoSuchMethodException {
-        Method fallback = OrderService.class.getMethod("paymentFallback", OrderRequest.class, Throwable.class);
+    void createOrder_publishesOrderPlacedEvent() {
+        OrderResponse response = orderService.createOrder(sampleRequest());
 
-        assertThat(fallback.getParameterCount()).isEqualTo(2);
-        assertThat(fallback.getParameterTypes()[0]).isEqualTo(OrderRequest.class);
-        assertThat(fallback.getParameterTypes()[1]).isEqualTo(Throwable.class);
+        ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(kafkaTemplate).send(topicCaptor.capture(), any(), eventCaptor.capture());
+
+        assertThat(topicCaptor.getValue()).isEqualTo("order-events");
+        assertThat(eventCaptor.getValue()).isInstanceOf(com.raya.order_service.saga.event.OrderPlacedEvent.class);
+        var event = (com.raya.order_service.saga.event.OrderPlacedEvent) eventCaptor.getValue();
+        assertThat(event.orderId()).isEqualTo(response.orderId());
+        assertThat(event.productId()).isEqualTo("PROD-001");
+        assertThat(event.quantity()).isEqualTo(3);
     }
 
-    // ── Session 5 ───────────────────────────────────────────────────────
+    // ── OrderSagaEventHandler (final saga outcomes) ──────────────────────
 
     @Test
-    void bulkheadFallback_returnsQueuedStatus_onBulkheadFullException() throws Exception {
-        OrderRequest request = new OrderRequest("PROD-1", 2, new BigDecimal("100.00"), "CUST-1");
-        // Built via the real public factory (verified against the
-        // resilience4j source: Bulkhead.ofDefaults(name) + the public
-        // static BulkheadFullException.createBulkheadFullException(Bulkhead)
-        // factory) rather than mocked — BulkheadFullException's constructor
-        // is private, so this is the only supported way to obtain a real
-        // instance outside the library itself.
-        io.github.resilience4j.bulkhead.Bulkhead bulkhead =
-                io.github.resilience4j.bulkhead.Bulkhead.ofDefaults("paymentService");
-        BulkheadFullException exception = BulkheadFullException.createBulkheadFullException(bulkhead);
+    void handlePaymentEvent_paymentCompleted_marksOrderConfirmed() {
+        Order existing = new Order("ORD-1", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PENDING, "CUST-1");
+        org.mockito.Mockito.when(orderRepository.findById("ORD-1")).thenReturn(Optional.of(existing));
 
-        CompletableFuture<OrderResponse> result = orderService.bulkheadFallback(request, exception);
+        sagaEventHandler.handlePaymentEvent("{\"type\":\"PaymentCompletedEvent\",\"orderId\":\"ORD-1\",\"transactionId\":\"TX-9\"}", "payment-events");
 
-        assertThat(result.get().status()).isEqualTo("QUEUED");
-    }
-
-    @Test
-    void timeoutFallback_returnsPendingStatus_wrappedInCompletableFuture() throws Exception {
-        OrderRequest request = new OrderRequest("PROD-1", 2, new BigDecimal("100.00"), "CUST-1");
-        TimeoutException exception = new TimeoutException("Payment exceeded 2s limit");
-
-        CompletableFuture<OrderResponse> result = orderService.timeoutFallback(request, exception);
-
-        assertThat(result).isInstanceOf(CompletableFuture.class);
-        assertThat(result.get().status()).isEqualTo("PENDING");
+        assertThat(existing.status()).isEqualTo(OrderStatus.CONFIRMED);
+        verify(orderRepository).save(existing);
     }
 
     @Test
-    void createOrderAsync_hasAllFourResilienceAnnotations_inTheDocumentedOrder() throws NoSuchMethodException {
-        Method method = OrderService.class.getMethod("createOrderAsync", OrderRequest.class);
+    void handlePaymentEvent_paymentFailed_marksOrderPaymentFailed() {
+        Order existing = new Order("ORD-2", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PENDING, "CUST-1");
+        org.mockito.Mockito.when(orderRepository.findById("ORD-2")).thenReturn(Optional.of(existing));
 
-        assertThat(method.getAnnotation(Bulkhead.class)).isNotNull();
-        assertThat(method.getAnnotation(TimeLimiter.class)).isNotNull();
-        assertThat(method.getAnnotation(CircuitBreaker.class)).isNotNull();
-        assertThat(method.getAnnotation(Retry.class)).isNotNull();
+        sagaEventHandler.handlePaymentEvent("{\"type\":\"PaymentFailedEvent\",\"orderId\":\"ORD-2\",\"reason\":\"declined\"}", "payment-events");
 
-        assertThat(method.getAnnotation(Bulkhead.class).name()).isEqualTo("paymentService");
-        assertThat(method.getAnnotation(TimeLimiter.class).name()).isEqualTo("paymentService");
-        assertThat(method.getAnnotation(CircuitBreaker.class).name()).isEqualTo("paymentService");
-        assertThat(method.getAnnotation(Retry.class).name()).isEqualTo("paymentService");
+        assertThat(existing.status()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+        verify(orderRepository).save(existing);
+    }
+
+    @Test
+    void handleInventoryReleased_marksOrderCancelled() {
+        Order existing = new Order("ORD-3", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PAYMENT_FAILED, "CUST-1");
+        org.mockito.Mockito.when(orderRepository.findById("ORD-3")).thenReturn(Optional.of(existing));
+
+        sagaEventHandler.handleInventoryReleased("{\"type\":\"InventoryReleasedEvent\",\"orderId\":\"ORD-3\"}");
+
+        assertThat(existing.status()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository).save(existing);
     }
 }

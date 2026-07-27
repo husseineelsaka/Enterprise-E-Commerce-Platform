@@ -18,6 +18,9 @@ public class InventoryService {
             "PROD-003", new StockItem("PROD-003", 0,  0)  // out of stock
     ));
 
+    // Track what each order reserved, so compensation can release the exact stock
+    private final Map<String, ReservedLine> reservations = new ConcurrentHashMap<>();
+
     public StockCheckResponse checkStock(String productId, int requestedQty) {
         StockItem item = stock.getOrDefault(productId,
                 new StockItem(productId, 0, 0));
@@ -25,4 +28,37 @@ public class InventoryService {
         return new StockCheckResponse(productId, requestedQty,
                 available, item.availableQuantity() - item.reservedQuantity());
     }
+
+    public synchronized void reserveStock(String productId, int quantity, String orderId) {
+        StockItem item = stock.get(productId);
+        if (item == null) {
+            throw new InsufficientStockException("Product not found: " + productId);
+        }
+        if (!item.hasStock(quantity)) {
+            throw new InsufficientStockException(
+                    "Insufficient stock for " + productId + ": requested " + quantity
+                            + ", available " + (item.availableQuantity() - item.reservedQuantity()));
+        }
+        stock.put(productId, new StockItem(productId, item.availableQuantity(),
+                item.reservedQuantity() + quantity));
+        reservations.put(orderId, new ReservedLine(productId, quantity));
+    }
+
+    public synchronized void releaseStock(String orderId) {
+        ReservedLine line = reservations.remove(orderId);
+        if (line == null) {
+            return;
+        }
+        StockItem item = stock.get(line.productId());
+        if (item == null) {
+            return;
+        }
+        int released = Math.min(item.reservedQuantity(), line.quantity());
+        stock.put(line.productId(), new StockItem(line.productId(), item.availableQuantity(),
+                item.reservedQuantity() - released));
+    }
+
+    public record ReservedLine(String productId, int quantity) {
+    }
 }
+
