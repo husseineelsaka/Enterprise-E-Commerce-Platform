@@ -50,10 +50,10 @@ public class PaymentCommandHandler {
         log.info("[SAGA] Command ProcessPayment for order: {}", orderId);
         try {
             String txId = paymentService.processPayment(orderId);
-            reply(orderId, new PaymentResultEvent(orderId, true, txId));
+            reply(orderId, new PaymentResultEvent(orderId, true, null, txId));
             log.info("[SAGA] Payment COMPLETED for order: {} ✅ — txId {}", orderId, txId);
         } catch (PaymentException e) {
-            reply(orderId, new PaymentResultEvent(orderId, false, e.getMessage()));
+            reply(orderId, new PaymentResultEvent(orderId, false, e.getMessage(), null));
             log.warn("[SAGA] Payment FAILED for order: {} ❌ — {}", orderId, e.getMessage());
         }
     }

@@ -2,6 +2,8 @@ package com.raya.order_service.saga;
 
 import com.raya.order_service.dto.OrderRequest;
 import com.raya.order_service.dto.OrderResponse;
+import com.raya.order_service.event.OrderConfirmedEvent;
+import com.raya.order_service.messaging.OrderEventPublisher;
 import com.raya.order_service.model.Order;
 import com.raya.order_service.model.OrderStatus;
 import com.raya.order_service.repository.OrderRepository;
@@ -59,6 +61,10 @@ public class OrderSagaOrchestrator {
     @Autowired
     private OrderRepository orderRepository;
 
+    /** Same publisher the choreography path uses, so both sagas notify identically. */
+    @Autowired
+    private OrderEventPublisher eventPublisher;
+
     // ---------------------------------------------------------------- start
 
     public OrderResponse startSaga(OrderRequest request) {
@@ -70,10 +76,13 @@ public class OrderSagaOrchestrator {
 
         sagaStates.put(orderId, SagaState.STARTED);
 
-        // STEP 1: tell inventory what to do — no event, a command
+        // STEP 1: tell inventory what to do — no event, a command.
+        // State is set BEFORE the send: this method runs on the HTTP thread while
+        // replies arrive on the Kafka listener thread, so a fast reply would
+        // otherwise be rejected by the state guard and strand the saga.
+        transition(orderId, SagaState.INVENTORY_RESERVING);
         kafkaTemplate.send(COMMANDS_TOPIC, orderId,
                 new ReserveInventoryCommand(orderId, request.productId(), request.quantity()));
-        transition(orderId, SagaState.INVENTORY_RESERVING);
 
         return new OrderResponse(orderId, OrderStatus.PENDING.name(), "Order received — processing...");
     }
@@ -92,9 +101,10 @@ public class OrderSagaOrchestrator {
 
         switch (type) {
             case "InventoryResultEvent" -> handleInventoryResult(new InventoryResultEvent(
-                    orderId, node.path("success").asBoolean(), node.path("reason").asText(null)));
+                    orderId, node.path("success").asBoolean(), text(node, "reason")));
             case "PaymentResultEvent" -> handlePaymentResult(new PaymentResultEvent(
-                    orderId, node.path("success").asBoolean(), node.path("reason").asText(null)));
+                    orderId, node.path("success").asBoolean(), text(node, "reason"),
+                    text(node, "transactionId")));
             case "InventoryReleasedEvent" -> handleInventoryReleased(new InventoryReleasedEvent(orderId));
             default -> log.debug("[SAGA] Ignoring unknown reply type '{}' on {}", type, RESULTS_TOPIC);
         }
@@ -107,9 +117,9 @@ public class OrderSagaOrchestrator {
             transition(event.orderId(), SagaState.INVENTORY_RESERVED);
 
             // STEP 2: inventory is held — now charge the customer
+            transition(event.orderId(), SagaState.PAYMENT_PROCESSING);
             kafkaTemplate.send(COMMANDS_TOPIC, event.orderId(),
                     new ProcessPaymentCommand(event.orderId(), getOrderAmount(event.orderId())));
-            transition(event.orderId(), SagaState.PAYMENT_PROCESSING);
         } else {
             // Nothing to compensate yet — no stock was reserved
             transition(event.orderId(), SagaState.INVENTORY_RESERVE_FAILED);
@@ -126,6 +136,7 @@ public class OrderSagaOrchestrator {
         if (event.success()) {
             transition(event.orderId(), SagaState.COMPLETED);
             updateOrderStatus(event.orderId(), OrderStatus.CONFIRMED);
+            notifyOrderConfirmed(event.orderId(), event.transactionId());
             sagaStates.remove(event.orderId());
             log.info("[SAGA] ✅ Order {} CONFIRMED", event.orderId());
         } else {
@@ -133,9 +144,9 @@ public class OrderSagaOrchestrator {
             transition(event.orderId(), SagaState.PAYMENT_FAILED);
             updateOrderStatus(event.orderId(), OrderStatus.PAYMENT_FAILED);
 
+            transition(event.orderId(), SagaState.INVENTORY_RELEASING);
             kafkaTemplate.send(COMMANDS_TOPIC, event.orderId(),
                     new ReleaseInventoryCommand(event.orderId()));
-            transition(event.orderId(), SagaState.INVENTORY_RELEASING);
             log.warn("[SAGA] Order {} payment failed ({}) — releasing inventory",
                     event.orderId(), event.reason());
         }
@@ -179,11 +190,32 @@ public class OrderSagaOrchestrator {
                 .orElseThrow(() -> new IllegalStateException("Order not found: " + orderId));
     }
 
+    /**
+     * The choreography path ends by publishing OrderConfirmedEvent, which is what
+     * notification-service listens for. The orchestrated path has to do the same,
+     * or an orchestrated order completes without ever notifying the customer.
+     */
+    private void notifyOrderConfirmed(String orderId, String transactionId) {
+        orderRepository.findById(orderId).ifPresent(order ->
+                eventPublisher.publishOrderConfirmed(new OrderConfirmedEvent(
+                        order.orderId(), order.amount(), order.customerId(), transactionId)));
+    }
+
     private void updateOrderStatus(String orderId, OrderStatus status) {
         orderRepository.findById(orderId).ifPresent(order -> {
             order.setStatus(status);
             orderRepository.save(order);
         });
+    }
+
+    /**
+     * Reads an optional string field as a real null. Replies serialize their unused
+     * field explicitly (a successful payment sends "reason": null), and asText()
+     * turns that into the literal string "null".
+     */
+    private String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isNull() || value.isMissingNode() ? null : value.asText();
     }
 
     private JsonNode readTree(String rawReply) {
