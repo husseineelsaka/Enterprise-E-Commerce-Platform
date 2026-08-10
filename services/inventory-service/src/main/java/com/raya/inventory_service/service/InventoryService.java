@@ -58,6 +58,17 @@ public class InventoryService {
                 item.reservedQuantity() - released));
     }
 
+    /**
+     * Force a product back to a known quantity and drop any reservation held
+     * against it. Stock lives in an in-memory map, so a test that needs a
+     * specific starting point has no database to seed — this is how the Pact
+     * provider states put the service into the state the contract assumes.
+     */
+    public synchronized void resetStock(String productId, int availableQuantity, int reservedQuantity) {
+        stock.put(productId, new StockItem(productId, availableQuantity, reservedQuantity));
+        reservations.entrySet().removeIf(entry -> entry.getValue().productId().equals(productId));
+    }
+
     public record ReservedLine(String productId, int quantity) {
     }
 }
