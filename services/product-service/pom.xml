@@ -73,6 +73,27 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Lab 9A — @DataJpaTest slice (Boot 4 splits the test slices per module) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Lab 9A — TestContainers: real PostgreSQL instead of H2.
+		     Boot 4.1 manages TestContainers 2.x, whose modules are named
+		     testcontainers-<module> (the 1.x names no longer resolve). -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
