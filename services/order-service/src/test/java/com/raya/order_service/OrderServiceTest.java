@@ -2,6 +2,7 @@ package com.raya.order_service.service;
 
 import com.raya.order_service.dto.OrderRequest;
 import com.raya.order_service.dto.OrderResponse;
+import com.raya.order_service.messaging.OrderEventPublisher;
 import com.raya.order_service.model.Order;
 import com.raya.order_service.model.OrderStatus;
 import com.raya.order_service.repository.OrderRepository;
@@ -28,6 +29,12 @@ class OrderServiceTest {
 
     @Mock
     private org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
+
+    // OrderSagaEventHandler publishes OrderConfirmedEvent on the happy path.
+    // Without a mock declared here @InjectMocks leaves the field null and the
+    // confirmation test NPEs.
+    @Mock
+    private OrderEventPublisher eventPublisher;
 
     @InjectMocks
     private OrderService orderService;

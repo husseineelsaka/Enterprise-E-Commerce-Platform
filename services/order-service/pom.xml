@@ -30,6 +30,7 @@
 		<java.version>21</java.version>
 		<spring-cloud.version>2025.0.3</spring-cloud.version>
 		<resilience4j.version>2.2.0</resilience4j.version>
+		<pact.version>4.6.7</pact.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -76,6 +77,31 @@
 			<artifactId>spring-kafka</artifactId>
 		</dependency>
 
+		<!-- Lab 9B — Pact consumer: order-service defines what it expects from
+		     inventory-service and writes target/pacts/*.json -->
+		<dependency>
+			<groupId>au.com.dius.pact.consumer</groupId>
+			<artifactId>junit5</artifactId>
+			<version>${pact.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Lab 9B — the Pact and WireMock tests build a Feign client by hand
+		     against a mock server, which needs a JSON decoder on the test path. -->
+		<dependency>
+			<groupId>io.github.openfeign</groupId>
+			<artifactId>feign-jackson</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Lab 9B — WireMock: a real HTTP server, so Feign actually serialises,
+		     sends, and deserialises instead of being replaced by a Mockito proxy. -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-contract-wiremock</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -94,6 +120,25 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!--
+					  Selector.open() builds its wakeup pipe over an AF_UNIX socket whose
+					  file is created in %TEMP%. On this machine AF_UNIX connect() fails
+					  there with "Invalid argument: connect", so every NIO selector — Kafka's
+					  NetworkClient, Tomcat, Jetty/WireMock, the Pact mock server — dies with
+					  "Unable to establish loopback connection".
+
+					  Pointing the socket file at the build directory avoids the bad path.
+					  Harmless everywhere else: it only relocates a temporary socket file.
+					  Quoted because this checkout's path contains spaces and surefire
+					  splits argLine on whitespace.
+					-->
+					<argLine>"-Djdk.net.unixdomain.tmpdir=${project.build.directory}"</argLine>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
