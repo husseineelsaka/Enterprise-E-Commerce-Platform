@@ -14,7 +14,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Component
 public class JwtUtil {
 
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:my-super-secret-key-for-jwt-authentication-123456}")
     private String secret;
 
     private SecretKey getSigningKey() {
