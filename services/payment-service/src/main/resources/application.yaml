@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: payment-service
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+eureka:
+  instance:
+    prefer-ip-address: true
+
+
+payment:
+  failure-rate: 0.5  # 50% failure — change to 0.0 to test recovery (Session 4)
+  delay-ms: 0         # 0 = no artificial delay. Session 5 demo sets this to
+    # 3000 (3s) to trigger the 2s TimeLimiter on Order Service.
+  # DEV ONLY — this is a test knob, never a real payment gateway setting.
