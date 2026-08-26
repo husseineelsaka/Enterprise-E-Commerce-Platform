@@ -37,7 +37,10 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     public JwtAuthFilter(JwtUtil jwtUtil, GatewayProperties gatewayProperties) {
         this.jwtUtil = jwtUtil;
-        this.publicRoutes = gatewayProperties.publicRoutes().stream()
+        List<GatewayProperties.Route> routes = (gatewayProperties != null && gatewayProperties.publicRoutes() != null)
+                ? gatewayProperties.publicRoutes()
+                : List.of();
+        this.publicRoutes = routes.stream()
                 .map(r -> new PublicRoute(HttpMethod.valueOf(r.method()), r.path()))
                 .toList();
     }

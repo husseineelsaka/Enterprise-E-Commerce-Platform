@@ -7,3 +7,17 @@ spring:
 eureka:
   instance:
     prefer-ip-address: true
+
+gateway:
+  public-routes:
+    - method: POST
+      path: /api/auth/login
+    - method: POST
+      path: /api/auth/register
+    - method: GET
+      path: /actuator/**
+    - method: GET
+      path: /api/v1/products/**
+
+jwt:
+  secret: ${JWT_SECRET:my-super-secret-key-for-jwt-authentication-123456}
