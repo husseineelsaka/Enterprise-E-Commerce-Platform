@@ -14,17 +14,6 @@ jobs:
   test:
     name: Test & Quality Gate
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service:
-          - services/product-service
-          - services/order-service
-          - services/inventory-service
-          - services/payment-service
-          - services/notification-service
-          - Infrastructure/api-gateway
-          - Infrastructure/config-server
-          - Infrastructure/discovery-server
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,7 +24,28 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: 'temurin'
           cache: maven
-          cache-dependency-path: '${{ matrix.service }}/pom.xml'
+          cache-dependency-path: '**/pom.xml'
 
-      - name: Run tests (${{ matrix.service }})
-        run: mvn test -f ${{ matrix.service }}/pom.xml -B
+      - name: Test order-service (generates contract pacts)
+        run: mvn test -f services/order-service/pom.xml -B
+
+      - name: Test inventory-service (verifies contract pacts)
+        run: mvn test -f services/inventory-service/pom.xml -B
+
+      - name: Test product-service
+        run: mvn test -f services/product-service/pom.xml -B
+
+      - name: Test payment-service
+        run: mvn test -f services/payment-service/pom.xml -B
+
+      - name: Test notification-service
+        run: mvn test -f services/notification-service/pom.xml -B
+
+      - name: Test api-gateway
+        run: mvn test -f Infrastructure/api-gateway/pom.xml -B
+
+      - name: Test config-server
+        run: mvn test -f Infrastructure/config-server/pom.xml -B
+
+      - name: Test discovery-server
+        run: mvn test -f Infrastructure/discovery-server/pom.xml -B
