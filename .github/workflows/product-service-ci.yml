@@ -2,11 +2,11 @@ name: Product Service CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, Dev]
     paths:
       - 'services/product-service/**'
   pull_request:
-    branches: [main]
+    branches: [main, Dev]
     paths:
       - 'services/product-service/**'
 
@@ -29,9 +29,10 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: 'temurin'
           cache: maven
+          cache-dependency-path: 'services/product-service/pom.xml'
 
       - name: Run tests (Quality Gate)
-        run: mvn test -pl services/product-service -B
+        run: mvn test -f services/product-service/pom.xml -B
 
   build-and-push:
     name: Build & Push Docker Image
