@@ -8,12 +8,12 @@ spec:
   selector:
     matchLabels:
       app: product-service
-      track: canary
+      version: canary
   template:
     metadata:
       labels:
         app: product-service
-        track: canary
+        version: canary
     spec:
       containers:
         - name: product-service
