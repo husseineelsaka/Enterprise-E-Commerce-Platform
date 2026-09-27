@@ -2,7 +2,9 @@ package com.raya.product_service.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.raya.product_service.model.Product;
-import com.raya.product_service.service.ProductService;
+import com.raya.product_service.projection.ProductSummaryProjection;
+import com.raya.product_service.service.ProductCommandService;
+import com.raya.product_service.service.ProductQueryService;
 import com.raya.product_service.support.TestCacheConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,17 +26,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Lab 9A · Part 2 — @WebMvcTest slice for ProductController.
- *
- * Loads only DispatcherServlet + ProductController + Jackson + the validation
- * filters. No ProductService (it is a Mockito bean override), no repository,
- * no DataSource, no Redis. MockMvc dispatches in memory — no socket is opened.
- *
- * On Spring Boot 4 the slice annotation lives in
- * org.springframework.boot.webmvc.test.autoconfigure and @MockBean is gone —
- * @MockitoBean from spring-test replaces it.
- */
 @WebMvcTest(ProductController.class)
 @Import(TestCacheConfig.class)
 class ProductControllerTest {
@@ -46,26 +37,37 @@ class ProductControllerTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private ProductService productService;
+    private ProductCommandService commandService;
+
+    @MockitoBean
+    private ProductQueryService queryService;
+
+    record TestProductSummary(Long id, String name, BigDecimal price, String categoryName) implements ProductSummaryProjection {
+        @Override public Long getId() { return id; }
+        @Override public String getName() { return name; }
+        @Override public BigDecimal getPrice() { return price; }
+        @Override public String getCategoryName() { return categoryName; }
+    }
 
     @Test
     @DisplayName("GET /api/v1/products/{id} returns 200 with the product JSON")
     void getProduct_found_returns200() throws Exception {
-        Product product = new Product(1L, "Laptop", "15-inch laptop", new BigDecimal("999.99"), "Electronics");
-        when(productService.findById(1L)).thenReturn(Optional.of(product));
+        ProductSummaryProjection proj = new TestProductSummary(1L, "Laptop", new BigDecimal("999.99"), "Electronics");
+
+        when(queryService.findById(1L)).thenReturn(Optional.of(proj));
 
         mockMvc.perform(get("/api/v1/products/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.name").value("Laptop"))
                 .andExpect(jsonPath("$.price").value(999.99))
-                .andExpect(jsonPath("$.category").value("Electronics"));
+                .andExpect(jsonPath("$.categoryName").value("Electronics"));
     }
 
     @Test
     @DisplayName("GET /api/v1/products/{id} returns 404 when the product does not exist")
     void getProduct_notFound_returns404() throws Exception {
-        when(productService.findById(99L)).thenReturn(Optional.empty());
+        when(queryService.findById(99L)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/v1/products/99"))
                 .andExpect(status().isNotFound());
@@ -74,9 +76,10 @@ class ProductControllerTest {
     @Test
     @DisplayName("GET /api/v1/products returns 200 with the full list")
     void getAllProducts_returns200WithList() throws Exception {
-        when(productService.findAll()).thenReturn(List.of(
-                new Product(1L, "Laptop", "15-inch laptop", new BigDecimal("999.99"), "Electronics"),
-                new Product(2L, "Mouse", "Wireless mouse", new BigDecimal("19.99"), "Accessories")));
+        ProductSummaryProjection proj1 = new TestProductSummary(1L, "Laptop", new BigDecimal("999.99"), "Electronics");
+        ProductSummaryProjection proj2 = new TestProductSummary(2L, "Mouse", new BigDecimal("19.99"), "Accessories");
+
+        when(queryService.findAll()).thenReturn(List.of(proj1, proj2));
 
         mockMvc.perform(get("/api/v1/products"))
                 .andExpect(status().isOk())
@@ -90,7 +93,7 @@ class ProductControllerTest {
     void createProduct_valid_returns201() throws Exception {
         Product request = new Product("Keyboard", "Mechanical keyboard", new BigDecimal("89.50"), "Accessories");
         Product saved = new Product(10L, "Keyboard", "Mechanical keyboard", new BigDecimal("89.50"), "Accessories");
-        when(productService.save(any(Product.class))).thenReturn(saved);
+        when(commandService.create(any(Product.class))).thenReturn(saved);
 
         mockMvc.perform(post("/api/v1/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -104,8 +107,6 @@ class ProductControllerTest {
     @Test
     @DisplayName("POST /api/v1/products with a missing name returns 400")
     void createProduct_missingName_returns400() throws Exception {
-        // name is @NotBlank on the entity and the controller argument is @Valid,
-        // so the request must never reach the service.
         String bodyWithoutName = """
                 {"description":"Mechanical keyboard","price":89.50,"category":"Accessories"}
                 """;
