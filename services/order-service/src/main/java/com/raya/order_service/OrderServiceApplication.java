@@ -12,4 +12,9 @@ public class OrderServiceApplication {
 		SpringApplication.run(OrderServiceApplication.class, args);
 	}
 
+	@org.springframework.context.annotation.Bean
+	@org.springframework.boot.autoconfigure.condition.ConditionalOnBean(io.micrometer.core.instrument.MeterRegistry.class)
+	public io.micrometer.core.aop.TimedAspect timedAspect(io.micrometer.core.instrument.MeterRegistry registry) {
+		return new io.micrometer.core.aop.TimedAspect(registry);
+	}
 }

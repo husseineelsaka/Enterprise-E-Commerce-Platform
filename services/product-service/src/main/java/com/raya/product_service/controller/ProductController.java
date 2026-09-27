@@ -38,6 +38,7 @@ public class ProductController {
 
 
     // TODO: POST /api/v1/products        → create a new product
+    @io.micrometer.core.annotation.Timed(value = "product.create.duration", description = "Time to create a product")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Product create(@Valid @RequestBody Product product) {
