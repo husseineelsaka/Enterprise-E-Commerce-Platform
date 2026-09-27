@@ -1,7 +1,9 @@
 package com.raya.product_service.controller;
 
 import com.raya.product_service.model.Product;
-import com.raya.product_service.service.ProductService;
+import com.raya.product_service.projection.ProductSummaryProjection;
+import com.raya.product_service.service.ProductCommandService;
+import com.raya.product_service.service.ProductQueryService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,39 +15,33 @@ import java.util.List;
 @RequestMapping("/api/v1/products")
 public class ProductController {
 
-    // TODO: Inject ProductService
-    private final ProductService productService;
+    private final ProductCommandService commandService;
+    private final ProductQueryService queryService;
 
-
-    public ProductController(ProductService productService) {
-        this.productService = productService;
+    public ProductController(ProductCommandService commandService, ProductQueryService queryService) {
+        this.commandService = commandService;
+        this.queryService = queryService;
     }
 
-    // TODO: GET /api/v1/products         → return all products
     @GetMapping
-    public List<Product> findAll(){
-        return  productService.findAll();
+    public List<ProductSummaryProjection> findAll(){
+        return queryService.findAll();
     }
-
-    // TODO: GET /api/v1/products/{id}    → return product by id (404 if not found)
 
     @GetMapping("/{id}")
-    public ResponseEntity<Product> findById(@PathVariable Long id) {
-        return productService.findById(id)
+    public ResponseEntity<ProductSummaryProjection> findById(@PathVariable Long id) {
+        return queryService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-
-    // TODO: POST /api/v1/products        → create a new product
     @io.micrometer.core.annotation.Timed(value = "product.create.duration", description = "Time to create a product")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Product create(@Valid @RequestBody Product product) {
-        return productService.save(product);
+        return commandService.create(product);
     }
 
-    // TODO: PUT /api/v1/products/{id}     → update an existing product (404 if not found)
     @PutMapping("/{id}")
     public ResponseEntity<Product> update(@PathVariable Long id, @Valid @RequestBody Product product) {
         Product toUpdate = new Product(
@@ -55,16 +51,16 @@ public class ProductController {
                 product.price(),
                 product.category()
         );
-        return ResponseEntity.ok(productService.update(toUpdate));
+        return ResponseEntity.ok(commandService.update(toUpdate));
     }
-
-    // TODO: DELETE /api/v1/products/{id} → delete a product
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteById(@PathVariable Long id) {
-        boolean deleted = productService.deleteById(id);
-        return deleted
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        try {
+            commandService.deleteById(id);
+            return ResponseEntity.noContent().build();
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }
