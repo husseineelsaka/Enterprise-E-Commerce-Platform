@@ -30,19 +30,34 @@ public class OrderService {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private com.raya.order_service.repository.OutboxRepository outboxRepository;
+
+    @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
+    @org.springframework.transaction.annotation.Transactional
     public OrderResponse createOrder(OrderRequest request) {
         // Step 1: Create order in PENDING state (local transaction)
         Order order = new Order(UUID.randomUUID().toString(), request.productId(),
                 request.quantity(), request.amount(), OrderStatus.PENDING, request.customerId());
         orderRepository.save(order);
 
-        // Step 2: Publish event to start the Saga (async — no waiting)
-        kafkaTemplate.send("order-events", order.orderId(),
-                new OrderPlacedEvent(order.orderId(), request.productId(),
-                        request.quantity(), request.amount(), request.customerId()));
-        log.info("[SAGA] OrderPlacedEvent published for order: {}", order.orderId());
+        // Step 2: Save event to Outbox table (same transaction)
+        OrderPlacedEvent event = new OrderPlacedEvent(order.orderId(), request.productId(),
+                request.quantity(), request.amount(), request.customerId());
+        
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            com.raya.order_service.model.OutboxEvent outboxEvent = new com.raya.order_service.model.OutboxEvent(
+                    "Order", order.orderId(), "OrderPlacedEvent", payload);
+            outboxRepository.save(outboxEvent);
+            log.info("[OUTBOX] OrderPlacedEvent saved to outbox for order: {}", order.orderId());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize OrderPlacedEvent", e);
+        }
 
         // Return immediately — client gets PENDING, not final state
         return new OrderResponse(order.orderId(), OrderStatus.PENDING.name(), "Order received — processing...");
