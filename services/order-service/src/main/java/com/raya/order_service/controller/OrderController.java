@@ -53,4 +53,9 @@ public class OrderController {
                 .map(order -> ResponseEntity.ok(order.status().name()))
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @GetMapping("/admin/all")
+    public ResponseEntity<String> getAdminOrders() {
+        return ResponseEntity.ok("Admin access granted.");
+    }
 }

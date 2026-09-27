@@ -3,6 +3,21 @@ spring:
     name: order-service
   config:
     import: "optional:configserver:http://localhost:8888"
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8090/realms/ecommerce-platform
+      client:
+        registration:
+          inventory-client:
+            provider: keycloak
+            client-id: order-service
+            client-secret: order-secret
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: http://keycloak:8090/realms/ecommerce-platform/protocol/openid-connect/token
 
 management:
   tracing:
