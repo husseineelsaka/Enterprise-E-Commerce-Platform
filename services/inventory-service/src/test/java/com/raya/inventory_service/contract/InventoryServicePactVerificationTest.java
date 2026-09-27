@@ -67,8 +67,18 @@ class InventoryServicePactVerificationTest {
     /** Matches given("PROD-001 has 100 units in stock") in the consumer test. */
     @State("PROD-001 has 100 units in stock")
     void prod001HasOneHundredUnits() {
-        // Stock is an in-memory map, so put it back to the state the contract
-        // assumes rather than depending on whatever earlier tests left behind.
         inventoryService.resetStock("PROD-001", 100, 0);
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class TestSecurityConfig {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
+        public org.springframework.security.web.SecurityFilterChain testSecurityFilterChain(org.springframework.security.config.annotation.web.builders.HttpSecurity http) throws Exception {
+            http.securityMatcher("/**")
+                .csrf(org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+            return http.build();
+        }
     }
 }
