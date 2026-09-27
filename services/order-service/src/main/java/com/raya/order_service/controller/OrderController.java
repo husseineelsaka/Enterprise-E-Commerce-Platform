@@ -34,12 +34,14 @@ public class OrderController {
     }
 
     /** Session 7: publishes OrderPlacedEvent — the services choreograph themselves. */
+    @io.micrometer.core.annotation.Timed(value = "order.create.duration", description = "Time to create an order")
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest request) {
         return ResponseEntity.ok(orderService.createOrder(request));
     }
 
     /** Session 12: hands the order to the orchestrator, which issues the commands. */
+    @io.micrometer.core.annotation.Timed(value = "order.create.orchestrated.duration", description = "Time to create an orchestrated order")
     @PostMapping("/orchestrated")
     public ResponseEntity<OrderResponse> createOrderOrchestrated(@RequestBody OrderRequest request) {
         return ResponseEntity.ok(sagaOrchestrator.startSaga(request));
