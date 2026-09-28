@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,15 +37,29 @@ public class OrderController {
     /** Session 7: publishes OrderPlacedEvent — the services choreograph themselves. */
     @io.micrometer.core.annotation.Timed(value = "order.create.duration", description = "Time to create an order")
     @PostMapping
-    public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest request) {
-        return ResponseEntity.ok(orderService.createOrder(request));
+    public ResponseEntity<OrderResponse> createOrder(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestBody OrderRequest request) {
+        return ResponseEntity.ok(orderService.createOrder(resolveRequest(request, userId)));
     }
 
     /** Session 12: hands the order to the orchestrator, which issues the commands. */
     @io.micrometer.core.annotation.Timed(value = "order.create.orchestrated.duration", description = "Time to create an orchestrated order")
     @PostMapping("/orchestrated")
-    public ResponseEntity<OrderResponse> createOrderOrchestrated(@RequestBody OrderRequest request) {
-        return ResponseEntity.ok(sagaOrchestrator.startSaga(request));
+    public ResponseEntity<OrderResponse> createOrderOrchestrated(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestBody OrderRequest request) {
+        return ResponseEntity.ok(sagaOrchestrator.startSaga(resolveRequest(request, userId)));
+    }
+
+    private OrderRequest resolveRequest(OrderRequest request, String userId) {
+        String customerId = (userId != null && !userId.isBlank()) ? userId : request.customerId();
+        return new OrderRequest(
+                request.productId(),
+                request.quantity(),
+                request.amount(),
+                customerId
+        );
     }
 
     @GetMapping("/{id}/status")
