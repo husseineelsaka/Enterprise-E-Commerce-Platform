@@ -6,8 +6,8 @@ spring:
     config:
       server:
         git:
-          uri: https://github.com/husseineelsaka/Enterprise-E-Commerce-Platform-Config-Repo
-          default-label: main
+          uri: ${SPRING_CLOUD_CONFIG_SERVER_GIT_URI:https://github.com/husseineelsaka/Enterprise-E-Commerce-Platform-Config-Repo}
+          default-label: ${SPRING_CLOUD_CONFIG_SERVER_GIT_DEFAULT_LABEL:main}
           clone-on-start: true
 
 server:
