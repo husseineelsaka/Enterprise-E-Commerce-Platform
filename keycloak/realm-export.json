@@ -1,4 +1,4 @@
-﻿{
+{
     "id":  "73107392-f937-49ce-b861-b71c19e0368e",
     "realm":  "ecommerce-platform",
     "notBefore":  0,
@@ -746,7 +746,7 @@
                         "enabled":  true,
                         "alwaysDisplayInConsole":  false,
                         "clientAuthenticatorType":  "client-secret",
-                        "secret":  "**********",
+                        "secret":  "bUpznLTC5HZK8VVLfXMDPn5VDjYFn9s5",
                         "redirectUris":  [
                                              "http://localhost:8080/login/oauth2/code/keycloak"
                                          ],
