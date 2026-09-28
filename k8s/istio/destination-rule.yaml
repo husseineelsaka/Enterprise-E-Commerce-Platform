@@ -1,0 +1,18 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: product-service
+  namespace: ecommerce
+spec:
+  host: product-service
+  subsets:
+    - name: stable
+      labels:
+        version: stable
+    - name: canary
+      labels:
+        version: canary
+  trafficPolicy:
+    outlierDetection:
+      consecutive5xxErrors: 5
+      baseEjectionTime: 30s

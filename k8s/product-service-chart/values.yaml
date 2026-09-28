@@ -1,0 +1,30 @@
+image:
+  repository: ghcr.io/org/product-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 8081
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+
+serviceAccount:
+  create: true
+  name: product-service-sa
+
+namespace: ecommerce

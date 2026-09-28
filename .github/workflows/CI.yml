@@ -1,0 +1,51 @@
+name: Enterprise Platform CI
+
+on:
+  push:
+    branches: [main, Dev]
+  pull_request:
+    branches: [main, Dev]
+
+env:
+  JAVA_VERSION: '21'
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    name: Test & Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+          cache-dependency-path: '**/pom.xml'
+
+      - name: Test order-service (generates contract pacts)
+        run: mvn test -f services/order-service/pom.xml -B
+
+      - name: Test inventory-service (verifies contract pacts)
+        run: mvn test -f services/inventory-service/pom.xml -B
+
+      - name: Test product-service
+        run: mvn test -f services/product-service/pom.xml -B
+
+      - name: Test payment-service
+        run: mvn test -f services/payment-service/pom.xml -B
+
+      - name: Test notification-service
+        run: mvn test -f services/notification-service/pom.xml -B
+
+      - name: Test api-gateway
+        run: mvn test -f Infrastructure/api-gateway/pom.xml -B
+
+      - name: Test config-server
+        run: mvn test -f Infrastructure/config-server/pom.xml -B
+
+      - name: Test discovery-server
+        run: mvn test -f Infrastructure/discovery-server/pom.xml -B

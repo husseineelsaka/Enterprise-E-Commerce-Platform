@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: order-service
+  config:
+    import: "optional:configserver:http://localhost:8888"
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://keycloak:8080/realms/ecommerce-platform/protocol/openid-connect/certs
+      client:
+        registration:
+          inventory-client:
+            provider: keycloak
+            client-id: order-service
+            client-secret: order-secret
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: http://keycloak:8080/realms/ecommerce-platform/protocol/openid-connect/token
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers,bulkheads

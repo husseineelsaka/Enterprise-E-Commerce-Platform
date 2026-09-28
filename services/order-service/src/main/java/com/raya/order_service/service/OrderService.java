@@ -1,0 +1,69 @@
+package com.raya.order_service.service;
+
+import com.raya.order_service.dto.OrderRequest;
+import com.raya.order_service.dto.OrderResponse;
+import com.raya.order_service.model.Order;
+import com.raya.order_service.model.OrderStatus;
+import com.raya.order_service.repository.OrderRepository;
+import com.raya.order_service.saga.event.OrderPlacedEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+
+import java.util.UUID;
+
+/**
+ * OrderService — Session 7 (Choreography Saga).
+ * createOrder() persists the order in PENDING state and publishes
+ * OrderPlacedEvent to start the saga. It returns immediately with PENDING —
+ * the final CONFIRMED / CANCELLED outcome arrives later via Kafka events
+ * handled by OrderSagaEventHandler.
+ */
+@Service
+public class OrderService {
+
+    @Autowired
+    private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private com.raya.order_service.repository.OutboxRepository outboxRepository;
+
+    @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
+    @org.springframework.transaction.annotation.Transactional
+    public OrderResponse createOrder(OrderRequest request) {
+        // Step 1: Create order in PENDING state (local transaction)
+        Order order = new Order(UUID.randomUUID().toString(), request.productId(),
+                request.quantity(), request.amount(), OrderStatus.PENDING, request.customerId());
+        orderRepository.save(order);
+
+        // Step 2: Save event to Outbox table (same transaction)
+        OrderPlacedEvent event = new OrderPlacedEvent(order.orderId(), request.productId(),
+                request.quantity(), request.amount(), request.customerId());
+        
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            com.raya.order_service.model.OutboxEvent outboxEvent = new com.raya.order_service.model.OutboxEvent(
+                    "Order", order.orderId(), "OrderPlacedEvent", payload);
+            outboxRepository.save(outboxEvent);
+            log.info("[OUTBOX] OrderPlacedEvent saved to outbox for order: {}", order.orderId());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new RuntimeException("Failed to serialize OrderPlacedEvent", e);
+        }
+
+        // Return immediately — client gets PENDING, not final state
+        return new OrderResponse(order.orderId(), OrderStatus.PENDING.name(), "Order received — processing...");
+    }
+
+    public java.util.Optional<Order> findById(String orderId) {
+        return orderRepository.findById(orderId);
+    }
+}
