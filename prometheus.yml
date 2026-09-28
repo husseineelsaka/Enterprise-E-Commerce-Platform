@@ -3,7 +3,11 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['order-service:8082']
+        labels:
+          application: 'order-service'
   - job_name: 'product-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['product-service:8081']
+        labels:
+          application: 'product-service'

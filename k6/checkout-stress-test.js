@@ -27,7 +27,8 @@ export default function () {
     }
   };
 
-  const res = http.post('http://localhost:8080/api/v1/orders', payload, params);
+  const baseUrl = __ENV.BASE_URL || 'http://localhost:8080';
+  const res = http.post(`${baseUrl}/api/v1/orders`, payload, params);
   
   check(res, {
     'status 200/202': (r) => [200, 202].includes(r.status)
