@@ -69,7 +69,7 @@ public class OrderSagaEventHandler {
         }
     }
 
-    // Cancellation: inventory was released after payment failure
+    // Cancellation: inventory was released after payment failure, or reservation failed upfront
     @KafkaListener(topics = "inventory-events", groupId = "order-service-cancel")
     public void handleInventoryReleased(String rawEvent) {
         if (rawEvent.contains("InventoryReleased")) {
@@ -78,6 +78,13 @@ public class OrderSagaEventHandler {
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
             log.info("[SAGA] Order {} CANCELLED — inventory released ✅", event.orderId());
+        } else if (rawEvent.contains("InventoryReservationFailed")) {
+            JsonNode node = readTree(rawEvent);
+            String orderId = node.path("orderId").asText();
+            Order order = orderRepository.findById(orderId).orElseThrow();
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            log.info("[SAGA] Order {} CANCELLED — inventory reservation failed (out of stock / unavailable) ❌", orderId);
         }
     }
 

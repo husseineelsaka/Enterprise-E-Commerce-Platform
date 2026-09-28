@@ -118,4 +118,15 @@ class OrderServiceTest {
         assertThat(existing.status()).isEqualTo(OrderStatus.CANCELLED);
         verify(orderRepository).save(existing);
     }
+
+    @Test
+    void handleInventoryReleased_inventoryReservationFailed_marksOrderCancelled() {
+        Order existing = new Order("ORD-4", "PROD-001", 3, new BigDecimal("100"), OrderStatus.PENDING, "CUST-1");
+        org.mockito.Mockito.when(orderRepository.findById("ORD-4")).thenReturn(Optional.of(existing));
+
+        sagaEventHandler.handleInventoryReleased("{\"type\":\"InventoryReservationFailedEvent\",\"orderId\":\"ORD-4\",\"reason\":\"Insufficient stock\"}");
+
+        assertThat(existing.status()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository).save(existing);
+    }
 }
