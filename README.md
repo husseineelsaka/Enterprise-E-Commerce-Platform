@@ -21,7 +21,13 @@ A production-grade, distributed e-commerce platform engineered with **Spring Boo
    - [4. CQRS & Read Acceleration](#4-cqrs--read-acceleration)
    - [5. Redis Token Bucket Rate Limiting](#5-redis-token-bucket-rate-limiting)
    - [6. Idempotency Key Handling](#6-idempotency-key-handling)
-4. [Quick Start (Docker Compose)](#quick-start-docker-compose)
+4. [Installation & Deployment Guide](#installation--deployment-guide)
+   - [System Requirements & Prerequisites](#system-requirements--prerequisites)
+   - [Method 1: Full-Stack Docker Compose (Recommended)](#method-1-full-stack-docker-compose-recommended)
+   - [Method 2: Hybrid Local Development](#method-2-hybrid-local-development)
+   - [Verification & Health Checks](#verification--health-checks)
+   - [Troubleshooting & Common Pitfalls](#troubleshooting--common-pitfalls)
+   - [Teardown & Clean Slate Reset](#teardown--clean-slate-reset)
 5. [API Guide & End-to-End Testing](#api-guide--end-to-end-testing)
    - [Authentication (Keycloak)](#step-1-authenticate-via-keycloak)
    - [Product Catalog (Public)](#step-2-query-products-public-cqrs-read)
@@ -177,31 +183,201 @@ In [`PaymentController.java`](file:///f:/Microservice-Course/Enterprise%20E-Comm
 
 ---
 
-## Quick Start (Docker Compose)
+## Installation & Deployment Guide
 
-### Prerequisites
-* **Docker & Docker Compose** (Docker Desktop on Windows/macOS or Docker Engine on Linux)
-* **Java 21 SDK** (for local development/builds)
-* **Maven 3.9+** (or the included `./mvnw`)
+### System Requirements & Prerequisites
 
-### 1. Launch the Platform
-From the project root:
-```powershell
-docker compose up -d
+| Requirement | Minimum | Recommended | Notes |
+| :--- | :--- | :--- | :--- |
+| **Operating System** | Windows 10/11, macOS, Linux | Ubuntu 22.04 LTS or Windows 11 with WSL 2 | Tested across Linux kernel 5.15+ and Windows WSL2. |
+| **Docker & Compose** | Docker Desktop 4.25+ / Docker Engine 24.0+ | Docker Compose v2.20+ | Multi-stage Docker builds require Compose v2 syntax (`docker compose`). |
+| **Docker Memory** | 8 GB RAM allocated | 12 GB+ RAM allocated | Running all 15 microservices and telemetry containers simultaneously requires at least 8 GB allocated to Docker. |
+| **CPU Cores** | 4 Cores | 8 Cores | Compiling services with Maven in Docker stages benefits from multi-threading. |
+| **Disk Space** | 15 GB free disk | 25 GB free disk | For container base images, compiled artifacts, and database volume state. |
+| **Local JDK / Maven** *(Optional)* | OpenJDK 21 | Eclipse Temurin 21 + Maven 3.9+ | Only required for **Method 2 (Host Development)**. Containerized setup requires no host Java. |
+
+---
+
+### Method 1: Full-Stack Docker Compose (Recommended)
+
+This method builds and starts all 15 containers inside Docker. Each service uses a multi-stage Dockerfile that builds with Eclipse Temurin 21 and runs as an unprivileged `spring` system user inside Eclipse Temurin 21 JRE Jammy.
+
+#### 1. Clone the Repository
+```bash
+git clone https://github.com/husseineelsaka/Enterprise-E-Commerce-Platform.git
+cd "Enterprise-E-Commerce-Platform"
 ```
 
-### 2. Verify Services Health
-Check that all containers are healthy:
-```powershell
+#### 2. Build & Launch the Complete Platform
+Execute from the repository root:
+```bash
+docker compose up -d --build
+```
+
+#### 3. Container Startup Sequence & Health Checks
+Docker Compose automatically coordinates service initialization with typed health checks and dependencies:
+1. **Backing Datastores First:** `postgres`, `redis`, and `kafka` (Apache Kafka in KRaft mode) boot up. `postgres` executes [`Infrastructure/postgres/init-dbs.sql`](file:///f:/Microservice-Course/Enterprise%20E-Commerce%20Platform/Infrastructure/postgres/init-dbs.sql) to provision `productdb`, `inventorydb`, `orderdb`, and `paymentdb`.
+2. **Identity & Central Config:** `keycloak` launches with `--import-realm`, mounting [`keycloak/realm-export.json`](file:///f:/Microservice-Course/Enterprise%20E-Commerce%20Platform/keycloak/realm-export.json) to seed the `ecommerce-platform` realm, users (`customer1`, `admin1`), and client credentials. `config-server` clones centralized configuration from Git.
+3. **Service Discovery:** `eureka-server` waits for `config-server` health before opening port `8761`.
+4. **Edge Gateway & Microservices:** `api-gateway`, `product-service`, `order-service`, `payment-service`, `inventory-service`, and `notification-service` boot once discovery and databases are healthy.
+5. **Telemetry Stack:** `zipkin`, `prometheus`, and `grafana` begin capturing metrics and traces.
+
+#### 4. Verify Running Containers
+Verify that all 15 containers are up and reporting `healthy`:
+```bash
 docker compose ps
 ```
 
-Key web portals:
-* **Eureka Service Registry:** [http://localhost:8761](http://localhost:8761)
-* **Keycloak Admin Console:** [http://localhost:8090](http://localhost:8090) *(Admin: `admin` / `admin`)*
-* **Zipkin Distributed Tracing:** [http://localhost:9411](http://localhost:9411)
-* **Prometheus Metrics:** [http://localhost:9090](http://localhost:9090)
-* **Grafana Dashboards:** [http://localhost:3000](http://localhost:3000) *(Login: `admin` / `admin`)*
+---
+
+### Method 2: Hybrid Local Development
+
+If you are developing or debugging a single microservice (for example, modifying business logic in `order-service` or `product-service` in IntelliJ IDEA or VS Code), you can run backing infrastructure in Docker and launch the microservice directly on your host machine.
+
+#### Step 1: Start Only Backing Services & Infrastructure
+```bash
+docker compose up -d postgres redis kafka keycloak config-server eureka-server zipkin prometheus grafana
+```
+
+#### Step 2: Build the Target Service with Maven
+Navigate to the service directory and run the included Maven wrapper:
+
+**PowerShell (Windows):**
+```powershell
+cd services/order-service
+.\mvnw.cmd clean package -DskipTests
+```
+
+**Bash (Linux / macOS):**
+```bash
+cd services/order-service
+./mvnw clean package -DskipTests
+```
+
+#### Step 3: Run the Service on Host
+Start the microservice using Spring Boot's runner. It will connect to the containerized backing stores via exposed host ports (`localhost:5432` for PostgreSQL, `localhost:6379` for Redis, `localhost:9092` for Kafka, and `localhost:8761` for Eureka):
+
+**PowerShell (Windows):**
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+**Bash (Linux / macOS):**
+```bash
+./mvnw spring-boot:run
+```
+
+---
+
+### Verification & Health Checks
+
+#### Web Management Consoles & Portals
+
+| Portal | URL | Default Credentials | Description |
+| :--- | :--- | :--- | :--- |
+| **Eureka Registry** | [http://localhost:8761](http://localhost:8761) | *None* | Live status of all registered microservice instances. |
+| **Keycloak Admin** | [http://localhost:8090](http://localhost:8090) | `admin` / `admin` | Identity realm, client credentials, users, and tokens. |
+| **Zipkin Tracing** | [http://localhost:9411](http://localhost:9411) | *None* | Distributed latency waterfalls and request dependency graphs. |
+| **Prometheus** | [http://localhost:9090](http://localhost:9090) | *None* | Raw metrics scrape targets and PromQL query console. |
+| **Grafana** | [http://localhost:3000](http://localhost:3000) | `admin` / `admin` | Real-time JVM, HTTP traffic, and service dashboards. |
+
+#### Automated Health Check Sweep
+Run the following script to verify that all Spring Boot Actuator endpoints report `{"status":"UP"}`:
+
+**PowerShell:**
+```powershell
+@(
+  @{ Name = "API Gateway";           Url = "http://localhost:8080/actuator/health" },
+  @{ Name = "Product Service";       Url = "http://localhost:8081/actuator/health" },
+  @{ Name = "Order Service";         Url = "http://localhost:8082/actuator/health" },
+  @{ Name = "Payment Service";       Url = "http://localhost:8083/actuator/health" },
+  @{ Name = "Inventory Service";     Url = "http://localhost:8084/actuator/health" },
+  @{ Name = "Notification Service";  Url = "http://localhost:8085/actuator/health" },
+  @{ Name = "Eureka Discovery";      Url = "http://localhost:8761/actuator/health" },
+  @{ Name = "Config Server";         Url = "http://localhost:8888/actuator/health" }
+) | ForEach-Object {
+    try {
+        $res = Invoke-RestMethod -Uri $_.Url -TimeoutSec 3
+        Write-Host "$($_.Name): $($res.status)" -ForegroundColor Green
+    } catch {
+        Write-Host "$($_.Name): OFFLINE / STARTING" -ForegroundColor Yellow
+    }
+}
+```
+
+**Bash / cURL:**
+```bash
+for port in 8080 8081 8082 8083 8084 8085 8761 8888; do
+  echo -n "Port $port: "
+  curl -s -f "http://localhost:$port/actuator/health" | grep -o '"status":"UP"' || echo "OFFLINE / STARTING"
+done
+```
+
+---
+
+### Troubleshooting & Common Pitfalls
+
+#### 1. Port Conflict (`Bind for 0.0.0.0:<port> failed: port is already allocated`)
+* **Problem:** Another process on your host is using port `5432` (local Postgres), `6379` (local Redis), `8080` (Tomcat/IIS/Nginx), or `9092` (local Kafka).
+* **Diagnosis & Resolution:**
+  * **Windows PowerShell:**
+    ```powershell
+    Get-NetTCPConnection -LocalPort 5432, 6379, 8080, 8090, 9092 | Select-Object LocalPort, OwningProcess
+    Stop-Process -Id <PID> -Force
+    ```
+  * **Linux / macOS:**
+    ```bash
+    sudo lsof -i :5432 -i :6379 -i :8080 -i :8090 -i :9092
+    kill -9 <PID>
+    ```
+
+#### 2. Container Killed (`Exit Code 137` / Out of Memory)
+* **Problem:** Docker ran out of allocated memory while compiling or running all microservices.
+* **Resolution:** Open Docker Desktop -> **Settings** -> **Resources** -> **Memory** and increase allocation to at least **8.0 GB** (12 GB recommended). If on Linux, ensure swap space is enabled.
+
+#### 3. Keycloak Realm Import Timing
+* **Problem:** First-time Keycloak startup can take 30–50 seconds to initialize Quarkus and import [`realm-export.json`](file:///f:/Microservice-Course/Enterprise%20E-Commerce%20Platform/keycloak/realm-export.json). Requests to fetch tokens during this window will fail.
+* **Resolution:** Tail the Keycloak log until you see the import completion message:
+  ```bash
+  docker compose logs -f keycloak
+  # Look for: "Keycloak 24.0.x on JVM (powered by Quarkus 3.x) started in ... ms"
+  ```
+
+#### 4. Kafka KRaft Cluster Initialization Wait
+* **Problem:** Microservices fail to start if Kafka's metadata broker has not completed initialization.
+* **Resolution:** `docker-compose.yml` configures `condition: service_started` for Kafka, but domain services will retry their Kafka producer/consumer connection automatically. Verify Kafka status:
+  ```bash
+  docker compose logs -f kafka
+  ```
+
+---
+
+### Teardown & Clean Slate Reset
+
+#### Graceful Stop (Preserves Data)
+Stops containers without deleting volumes or database tables:
+```bash
+docker compose stop
+```
+
+#### Full Teardown
+Stops and removes containers and networks:
+```bash
+docker compose down
+```
+
+#### Clean Slate Reset (Factory Reset)
+Removes all containers, networks, and persistent database volumes (`productdb`, `orderdb`, `inventorydb`, `paymentdb`, Redis cache):
+```bash
+docker compose down -v
+```
+
+#### Rebuilding After Source Code Changes
+If you modify source code and want to recompile images cleanly:
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
 
 ---
 
