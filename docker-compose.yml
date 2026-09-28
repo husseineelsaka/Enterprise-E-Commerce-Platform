@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: productdb
+      POSTGRES_DB: postgres
     volumes:
       - ./Infrastructure/postgres/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
     healthcheck:
